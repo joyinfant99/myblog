@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: my-blog-platform
+    env: node
+    buildCommand: cd client && npm install && npm run build && cd .. && npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
