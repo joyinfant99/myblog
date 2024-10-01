@@ -2,7 +2,7 @@ const express = require('express');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const cors = require('cors');
 const path = require('path');
-const SqljsStorage = require('sequelize-sql.js');
+
 
 
 
@@ -19,14 +19,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-const storage = new SqljsStorage();
+const dbPath = process.env.NODE_ENV === 'production'
+  ? '/opt/render/project/src/database.sqlite'
+  : path.join(__dirname, 'database.sqlite');
 
 
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: storage,
-  logging: process.env.NODE_ENV !== 'production' ? console.log : false
-});
+  const sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: dbPath,
+    dialectModule: require('better-sqlite3'),
+    logging: process.env.NODE_ENV !== 'production' ? console.log : false
+  });
 
 
 // Define models
