@@ -2,8 +2,14 @@ services:
   - type: web
     name: my-blog-platform
     env: node
-    buildCommand: cd client && npm install && npm run build && cd .. && npm install
-    startCommand: node server.js
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+    buildFilter:
+      paths:
+        - package.json
+        - package-lock.json
+        - server.js
+        - client/**
