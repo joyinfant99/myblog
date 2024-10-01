@@ -2,19 +2,32 @@ const express = require('express');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const cors = require('cors');
 const path = require('path');
+const SqljsStorage = require('sequelize-sql.js');
+
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'https://myblog-r61l.onrender.com' // Replace with your Render app URL
+    : 'http://localhost:3000'
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
-// Set up SQLite database
+const storage = new SqljsStorage();
+
+
 const sequelize = new Sequelize({
   dialect: 'sqlite',
-  storage: path.join(__dirname, 'database.sqlite'),
-  logging: console.log
+  storage: storage,
+  logging: process.env.NODE_ENV !== 'production' ? console.log : false
 });
+
 
 // Define models
 const BlogPost = sequelize.define('BlogPost', {
