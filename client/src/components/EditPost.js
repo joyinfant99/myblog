@@ -13,7 +13,7 @@ const EditPost = () => {
   useEffect(() => {
     const fetchPost = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/posts/${id}`);
+        const response = await fetch(`{process.env.REACT_APP_API_URL}/posts/${id}`);
         if (!response.ok) throw new Error('Failed to fetch post');
         const data = await response.json();
         setPost(data);
@@ -25,7 +25,7 @@ const EditPost = () => {
 
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:5000/categories');
+        const response = await fetch(`{process.env.REACT_APP_API_URL}/categories`);
         if (!response.ok) throw new Error('Failed to fetch categories');
         const data = await response.json();
         setCategories(data);
@@ -48,7 +48,7 @@ const EditPost = () => {
         throw new Error('Not authenticated');
       }
       console.log('Updating post with data:', post); // Log the data being sent
-      const response = await fetch(`http://localhost:5000/posts/${id}`, {
+      const response = await fetch(`{process.env.REACT_APP_API_URL}/posts/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

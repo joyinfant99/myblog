@@ -15,7 +15,7 @@ function SearchResults() {
       setLoading(true);
       setError('');
       try {
-        const response = await axios.get(`http://localhost:5000/posts/search?query=${encodeURIComponent(query)}`);
+        const response = await axios.get(`{process.env.REACT_APP_API_URL}/posts/search?query=${encodeURIComponent(query)}`);
         console.log('Search response:', response.data);
         setResults(response.data);
         setLoading(false);

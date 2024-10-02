@@ -6,6 +6,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import './BlogPost.css';
 
+
 const BlogPost = () => {
   const [post, setPost] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -20,7 +21,7 @@ const BlogPost = () => {
   useEffect(() => {
     const fetchPost = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/posts/${id}`);
+        const response = await fetch(`{process.env.REACT_APP_API_URL}/posts/${id}`);
         if (!response.ok) {
           throw new Error('Failed to fetch post');
         }
@@ -37,7 +38,7 @@ const BlogPost = () => {
 
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:5000/categories');
+        const response = await fetch(`{process.env.REACT_APP_API_URL}/categories`);
         if (!response.ok) throw new Error('Failed to fetch categories');
         const data = await response.json();
         setCategories(data);
@@ -55,7 +56,7 @@ const BlogPost = () => {
     if (window.confirm('Are you sure you want to delete this post?')) {
       try {
         const token = await getIdToken();
-        const response = await fetch(`http://localhost:5000/posts/${id}`, {
+        const response = await fetch(`{process.env.REACT_APP_API_URL}/posts/${id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -92,7 +93,7 @@ const BlogPost = () => {
       if (!token) {
         throw new Error('Not authenticated');
       }
-      const response = await fetch(`http://localhost:5000/posts/${id}`, {
+      const response = await fetch(`{process.env.REACT_APP_API_URL}/posts/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

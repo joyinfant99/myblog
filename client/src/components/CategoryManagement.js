@@ -16,7 +16,7 @@ function CategoryManagement() {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/categories');
+      const response = await axios.get(`{process.env.REACT_APP_API_URL}/categories`);
       setCategories(response.data);
     } catch (error) {
       setError('Failed to fetch categories');
@@ -27,7 +27,7 @@ function CategoryManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/categories', { name: newCategory });
+      await axios.post(`{process.env.REACT_APP_API_URL}/categories`, { name: newCategory });
       setNewCategory('');
       fetchCategories();
     } catch (error) {

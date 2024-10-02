@@ -26,7 +26,7 @@ function CreatePost() {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/categories');
+      const response = await axios.get(`{process.env.REACT_APP_API_URL}/categories`);
       setCategories(response.data);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -38,7 +38,7 @@ function CreatePost() {
     e.preventDefault();
     setError('');
     try {
-      await axios.post('http://localhost:5000/posts', { 
+      await axios.post(`{process.env.REACT_APP_API_URL}/posts`, { 
         title, 
         content, 
         CategoryId: categoryId || null,
@@ -54,7 +54,7 @@ function CreatePost() {
   const handleCreateCategory = async () => {
     if (!newCategory.trim()) return;
     try {
-      const response = await axios.post('http://localhost:5000/categories', { 
+      const response = await axios.post(`{process.env.REACT_APP_API_URL}/categories`, { 
         name: newCategory,
         backgroundColor: '#e0e0e0', // default background color
         fontColor: '#000000' // default font color
@@ -77,7 +77,7 @@ function CreatePost() {
   const handleUpdateCategory = async () => {
     if (!editCategoryName.trim()) return;
     try {
-      const response = await axios.put(`http://localhost:5000/categories/${editCategoryId}`, {
+      const response = await axios.put(`{process.env.REACT_APP_API_URL}/categories/${editCategoryId}`, {
         name: editCategoryName,
         backgroundColor: editCategoryBackgroundColor,
         fontColor: editCategoryFontColor
@@ -95,7 +95,7 @@ function CreatePost() {
 
   const handleDeleteCategory = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/categories/${id}`);
+      await axios.delete(`{process.env.REACT_APP_API_URL}/categories/${id}`);
       setCategories(categories.filter(cat => cat.id !== id));
     } catch (error) {
       console.error('Error deleting category:', error);

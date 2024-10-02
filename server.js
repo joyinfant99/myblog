@@ -1,11 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const cors = require('cors');
-const path = require('path');
-
-
-
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,19 +15,23 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-const dbPath = process.env.NODE_ENV === 'production'
-  ? '/opt/render/project/src/database.sqlite'
-  : path.join(__dirname, 'database.sqlite');
+// PostgreSQL connection configuration
+const sequelizeConfig = {
+  dialect: 'postgres',
+  protocol: 'postgres',
+  logging: process.env.NODE_ENV !== 'production' ? console.log : false
+};
 
+if (process.env.NODE_ENV === 'production') {
+  sequelizeConfig.dialectOptions = {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false
+    }
+  };
+}
 
-  const sequelize = new Sequelize({
-    dialect: 'sqlite',
-    storage: dbPath,
-    dialectModule: require('better-sqlite3'),
-    logging: process.env.NODE_ENV !== 'production' ? console.log : false
-  });
-
-
+const sequelize = new Sequelize(process.env.DATABASE_URL, sequelizeConfig);
 // Define models
 const BlogPost = sequelize.define('BlogPost', {
   title: {
@@ -194,8 +194,8 @@ app.get('/posts', async (req, res) => {
     }
     if (search) {
       where[Op.or] = [
-        { title: { [Op.like]: `%${search}%` } },
-        { content: { [Op.like]: `%${search}%` } }
+        { title: { [Op.iLike]: `%${search}%` } },
+        { content: { [Op.iLike]: `%${search}%` } }
       ];
     }
 

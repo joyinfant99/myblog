@@ -12,7 +12,7 @@ function UserProfile() {
   useEffect(() => {
     const fetchUserPosts = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/user/posts', {
+        const response = await axios.get(`{process.env.REACT_APP_API_URL}/user/posts`, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
         setUserPosts(response.data);

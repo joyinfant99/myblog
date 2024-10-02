@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import Introduction from './Introduction';
 
+
 const BlogList = ({ filters, setFilters }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +16,7 @@ const BlogList = ({ filters, setFilters }) => {
 
   const fetchPosts = useCallback(() => {
     setLoading(true);
-    const url = new URL('http://localhost:5000/posts');
+    const url = new URL(`{process.env.REACT_APP_API_URL}/posts`);
     url.searchParams.append('page', currentPage);
     url.searchParams.append('limit', 6);
     if (filters.category) url.searchParams.append('category', filters.category);
@@ -45,7 +46,7 @@ const BlogList = ({ filters, setFilters }) => {
   }, [fetchPosts]);
 
   useEffect(() => {
-    fetch('http://localhost:5000/categories')
+    fetch(`{process.env.REACT_APP_API_URL}/categories`)
       .then(response => response.json())
       .then(data => {
         setCategories(data);
