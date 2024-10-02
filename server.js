@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 5000;
 
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://myblog-r61l.onrender.com' // Replace with your Render app URL
+    ? 'https://myblog-frontend-ljjm.onrender.com' // Replace with your Render app URL
     : 'http://localhost:3000'
 };
 
