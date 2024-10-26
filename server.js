@@ -4,34 +4,46 @@ const { Sequelize, DataTypes, Op } = require('sequelize');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
+// CORS Configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://myblog-frontend-eight.vercel.app/' // Replace with your Render app URL
-    : 'http://localhost:3000'
+    ? 'https://myblog-frontend-eight.vercel.app'
+    : 'http://localhost:3000',
+  credentials: true
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// PostgreSQL connection configuration
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
+// PostgreSQL configuration
 const sequelizeConfig = {
   dialect: 'postgres',
   protocol: 'postgres',
-  logging: process.env.NODE_ENV !== 'production' ? console.log : false
-};
-
-if (process.env.NODE_ENV === 'production') {
-  sequelizeConfig.dialectOptions = {
+  logging: false,
+  dialectOptions: {
     ssl: {
       require: true,
       rejectUnauthorized: false
     }
-  };
-}
+  },
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  }
+};
 
 const sequelize = new Sequelize(process.env.DATABASE_URL, sequelizeConfig);
+
 // Define models
 const BlogPost = sequelize.define('BlogPost', {
   title: {
@@ -70,13 +82,25 @@ const Category = sequelize.define('Category', {
 BlogPost.belongsTo(Category);
 Category.hasMany(BlogPost);
 
-// Sync the models with the database
-sequelize.sync({ alter: true })
-  .then(() => console.log('Database synced'))
-  .catch((err) => console.error('Error syncing database:', err));
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({ 
+      status: 'healthy', 
+      message: 'Server is running and DB is connected',
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: error.message 
+    });
+  }
+});
 
 // Routes
-
 // Get all categories
 app.get('/categories', async (req, res) => {
   try {
@@ -128,21 +152,17 @@ app.delete('/categories/:id', async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // Find or create the "Uncategorized" category
     const [uncategorized] = await Category.findOrCreate({
       where: { name: 'Uncategorized' },
       defaults: { backgroundColor: '#e0e0e0', fontColor: '#000000' }
     });
 
-    // Update all posts in the deleted category to "Uncategorized"
     await BlogPost.update(
       { CategoryId: uncategorized.id },
       { where: { CategoryId: id } }
     );
 
-    // Delete the category
     await category.destroy();
-
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
@@ -150,6 +170,7 @@ app.delete('/categories/:id', async (req, res) => {
   }
 });
 
+// Blog Post Routes
 // Create a new blog post
 app.post('/posts', async (req, res) => {
   try {
@@ -232,7 +253,6 @@ app.put('/posts/:id', async (req, res) => {
     }
 
     await post.update({ title, content, CategoryId });
-
     const updatedPost = await BlogPost.findByPk(id, {
       include: [Category]
     });
@@ -262,6 +282,35 @@ app.delete('/posts/:id', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
+
+// Server startup sequence
+async function startServer() {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('Database connection established');
+
+    // Sync models
+    await sequelize.sync({ alter: true });
+    console.log('Database models synchronized');
+
+    // Start server
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV}`);
+    });
+  } catch (error) {
+    console.error('Unable to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
