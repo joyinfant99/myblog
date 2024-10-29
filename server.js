@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 8080;
 
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://myblog-frontend-eight.vercel.app' // Replace with your Render app URL
+    ? 'https://joyinfant.vercel.app' // Replace with your Render app URL
     : 'http://localhost:3000'
 };
 
@@ -19,26 +19,7 @@ app.use(express.json());
 const sequelizeConfig = {
   dialect: 'postgres',
   protocol: 'postgres',
-  logging: false,
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false,
-      // Adding these SSL parameters
-      sslmode: 'no-verify',
-      ssl: true
-    }
-  },
-  pool: {
-    max: 2, // Reduce pool size
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  },
-  retry: {
-    max: 3,
-    timeout: 3000
-  }
+  logging: process.env.NODE_ENV !== 'production' ? console.log : false
 };
 
 if (process.env.NODE_ENV === 'production') {
