@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 8080;
 
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://joyinfant.vercel.app' // Replace with your Render app URL
+    ? 'https://www.joyinfant.me' // Replace with your Render app URL
     : 'http://localhost:3000'
 };
 
