@@ -16,3 +16,8 @@ services:
     name: my-blog
     ipAllowList: []
     plan: free
+
+    routes:
+  - type: rewrite
+    source: /*
+    destination: /index.html
