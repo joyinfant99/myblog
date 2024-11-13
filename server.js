@@ -77,26 +77,35 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Configure static file serving with caching headers
+// Configure image serving with proper content types
 app.use('/uploads', (req, res, next) => {
-  res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Accept-Encoding');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
-  express.static('uploads', {
-    maxAge: '1y',
-    etag: true,
-    lastModified: true
-  })(req, res, next);
-});
+  const filePath = path.join(__dirname, 'uploads', req.path);
+  const ext = path.extname(req.path).toLowerCase();
+  
+  // Set correct content type for images
+  const contentType = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp'
+  }[ext] || 'application/octet-stream';
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads/')) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  next();
+  res.set({
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=31536000',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept'
+  });
+
+  // Send the file
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error('Error serving image:', err);
+      next(err);
+    }
+  });
 });
 
 // Database configuration
@@ -535,10 +544,12 @@ app.post('/posts', upload, async (req, res) => {
     // Handle image uploads
     if (req.files) {
       if (req.files.bannerImage) {
-        postData.bannerImage = req.files.bannerImage[0].path;
+        // Store only the filename instead of the full path
+        postData.bannerImage = path.basename(req.files.bannerImage[0].path);
       }
       if (req.files.socialImage) {
-        postData.socialImage = req.files.socialImage[0].path;
+        // Store only the filename instead of the full path
+        postData.socialImage = path.basename(req.files.socialImage[0].path);
       }
     }
 
@@ -625,10 +636,12 @@ app.put('/posts/:id', upload, async (req, res) => {
     // Handle image uploads
     if (req.files) {
       if (req.files.bannerImage) {
-        updateData.bannerImage = req.files.bannerImage[0].path;
+        // Store only the filename
+        updateData.bannerImage = path.basename(req.files.bannerImage[0].path);
       }
       if (req.files.socialImage) {
-        updateData.socialImage = req.files.socialImage[0].path;
+        // Store only the filename
+        updateData.socialImage = path.basename(req.files.socialImage[0].path);
       }
     }
 
@@ -636,13 +649,15 @@ app.put('/posts/:id', upload, async (req, res) => {
 
     // Clean up old images if new ones were uploaded
     if (req.files.bannerImage && oldBannerImage) {
-      if (fs.existsSync(oldBannerImage)) {
-        fs.unlinkSync(oldBannerImage);
+      const oldPath = path.join(__dirname, 'uploads', oldBannerImage);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
       }
     }
     if (req.files.socialImage && oldSocialImage) {
-      if (fs.existsSync(oldSocialImage)) {
-        fs.unlinkSync(oldSocialImage);
+      const oldPath = path.join(__dirname, 'uploads', oldSocialImage);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
       }
     }
 
@@ -682,9 +697,12 @@ app.delete('/posts/:id', async (req, res) => {
     await post.destroy();
 
     // Clean up image files
-    [bannerImage, socialImage].forEach(imagePath => {
-      if (imagePath && fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+    [bannerImage, socialImage].forEach(imageName => {
+      if (imageName) {
+        const imagePath = path.join(__dirname, 'uploads', imageName);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
       }
     });
 
@@ -765,6 +783,16 @@ const startServer = async () => {
       process.exit(1);
     });
 
+    // Handle specific server errors
+    server.on('clientError', (err, socket) => {
+      console.error('Client error:', err);
+      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    });
+
+    server.on('close', () => {
+      console.log('Server is shutting down...');
+    });
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
@@ -775,8 +803,15 @@ const startServer = async () => {
 const gracefulShutdown = async () => {
   try {
     console.log('Received shutdown signal. Starting graceful shutdown...');
+    
+    // Close database connections
     await sequelize.close();
     console.log('Database connections closed.');
+
+    // Clean up any temporary resources
+    console.log('Cleaning up resources...');
+
+    // Exit process
     process.exit(0);
   } catch (error) {
     console.error('Error during graceful shutdown:', error);
