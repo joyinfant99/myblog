@@ -70,8 +70,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Encoding'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Content-Length'],
 };
 
 app.use(cors(corsOptions));
@@ -80,7 +80,23 @@ app.use(express.json());
 // Configure static file serving with caching headers
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
-  express.static('uploads')(req, res, next);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Accept-Encoding');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
+  express.static('uploads', {
+    maxAge: '1y',
+    etag: true,
+    lastModified: true
+  })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads/')) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  next();
 });
 
 // Database configuration
