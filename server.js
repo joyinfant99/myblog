@@ -70,42 +70,17 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Encoding'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Content-Length'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Configure image serving with proper content types
+// Configure static file serving with caching headers
 app.use('/uploads', (req, res, next) => {
-  const filePath = path.join(__dirname, 'uploads', req.path);
-  const ext = path.extname(req.path).toLowerCase();
-  
-  // Set correct content type for images
-  const contentType = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp'
-  }[ext] || 'application/octet-stream';
-
-  res.set({
-    'Content-Type': contentType,
-    'Cache-Control': 'public, max-age=31536000',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-    'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept'
-  });
-
-  // Send the file
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      console.error('Error serving image:', err);
-      next(err);
-    }
-  });
+  res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+  express.static('uploads')(req, res, next);
 });
 
 // Database configuration
@@ -544,12 +519,10 @@ app.post('/posts', upload, async (req, res) => {
     // Handle image uploads
     if (req.files) {
       if (req.files.bannerImage) {
-        // Store only the filename instead of the full path
-        postData.bannerImage = path.basename(req.files.bannerImage[0].path);
+        postData.bannerImage = req.files.bannerImage[0].path;
       }
       if (req.files.socialImage) {
-        // Store only the filename instead of the full path
-        postData.socialImage = path.basename(req.files.socialImage[0].path);
+        postData.socialImage = req.files.socialImage[0].path;
       }
     }
 
@@ -636,12 +609,10 @@ app.put('/posts/:id', upload, async (req, res) => {
     // Handle image uploads
     if (req.files) {
       if (req.files.bannerImage) {
-        // Store only the filename
-        updateData.bannerImage = path.basename(req.files.bannerImage[0].path);
+        updateData.bannerImage = req.files.bannerImage[0].path;
       }
       if (req.files.socialImage) {
-        // Store only the filename
-        updateData.socialImage = path.basename(req.files.socialImage[0].path);
+        updateData.socialImage = req.files.socialImage[0].path;
       }
     }
 
@@ -649,15 +620,13 @@ app.put('/posts/:id', upload, async (req, res) => {
 
     // Clean up old images if new ones were uploaded
     if (req.files.bannerImage && oldBannerImage) {
-      const oldPath = path.join(__dirname, 'uploads', oldBannerImage);
-      if (fs.existsSync(oldPath)) {
-        fs.unlinkSync(oldPath);
+      if (fs.existsSync(oldBannerImage)) {
+        fs.unlinkSync(oldBannerImage);
       }
     }
     if (req.files.socialImage && oldSocialImage) {
-      const oldPath = path.join(__dirname, 'uploads', oldSocialImage);
-      if (fs.existsSync(oldPath)) {
-        fs.unlinkSync(oldPath);
+      if (fs.existsSync(oldSocialImage)) {
+        fs.unlinkSync(oldSocialImage);
       }
     }
 
@@ -697,12 +666,9 @@ app.delete('/posts/:id', async (req, res) => {
     await post.destroy();
 
     // Clean up image files
-    [bannerImage, socialImage].forEach(imageName => {
-      if (imageName) {
-        const imagePath = path.join(__dirname, 'uploads', imageName);
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
+    [bannerImage, socialImage].forEach(imagePath => {
+      if (imagePath && fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
       }
     });
 
@@ -783,16 +749,6 @@ const startServer = async () => {
       process.exit(1);
     });
 
-    // Handle specific server errors
-    server.on('clientError', (err, socket) => {
-      console.error('Client error:', err);
-      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-    });
-
-    server.on('close', () => {
-      console.log('Server is shutting down...');
-    });
-
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
@@ -803,15 +759,8 @@ const startServer = async () => {
 const gracefulShutdown = async () => {
   try {
     console.log('Received shutdown signal. Starting graceful shutdown...');
-    
-    // Close database connections
     await sequelize.close();
     console.log('Database connections closed.');
-
-    // Clean up any temporary resources
-    console.log('Cleaning up resources...');
-
-    // Exit process
     process.exit(0);
   } catch (error) {
     console.error('Error during graceful shutdown:', error);
