@@ -5,34 +5,32 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+console.log('Cloudinary configured:', process.env.CLOUDINARY_CLOUD_NAME);
 
 // Basic server health check route
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Configure multer for memory storage (Cloudinary upload)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === "image/png" || file.mimetype === "image/jpeg") {
+    if (file.mimetype === "image/png" || file.mimetype === "image/jpeg" || file.mimetype === "image/jpg") {
       cb(null, true);
     } else {
       cb(null, false);
@@ -47,12 +45,34 @@ const upload = multer({
   { name: 'socialImage', maxCount: 1 }
 ]);
 
+// Helper function to upload to Cloudinary
+const uploadToCloudinary = (fileBuffer, folder = 'blog-images') => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+        resource_type: 'image',
+        transformation: [
+          { quality: 'auto', fetch_format: 'auto' }
+        ]
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(fileBuffer);
+  });
+};
+
 // CORS configuration with social media crawler support
 const allowedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001', // Admin panel
   'https://blognextjs-sable.vercel.app',
   'https://myblog-frontend-ljjm.onrender.com',
   'https://www.joyinfant.me',
+  'https://www.joyinfant.com', // Production frontend
   'https://admin.joyinfant.me',
   'https://www.linkedin.com',
   'https://www.facebook.com',
@@ -77,27 +97,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Configure static file serving with caching headers
-app.use('/uploads', (req, res, next) => {
-  res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Accept-Encoding');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length');
-  express.static('uploads', {
-    maxAge: '1y',
-    etag: true,
-    lastModified: true
-  })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads/')) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  next();
-});
+// No longer need static file serving - images are on Cloudinary
 
 // Database configuration
 const sequelizeConfig = {
@@ -532,13 +532,15 @@ app.post('/posts', upload, async (req, res) => {
       seoKeywords: req.body.seoKeywords || []
     };
 
-    // Handle image uploads
+    // Handle image uploads to Cloudinary
     if (req.files) {
       if (req.files.bannerImage) {
-        postData.bannerImage = req.files.bannerImage[0].path;
+        const bannerUrl = await uploadToCloudinary(req.files.bannerImage[0].buffer, 'blog-images/banners');
+        postData.bannerImage = bannerUrl;
       }
       if (req.files.socialImage) {
-        postData.socialImage = req.files.socialImage[0].path;
+        const socialUrl = await uploadToCloudinary(req.files.socialImage[0].buffer, 'blog-images/social');
+        postData.socialImage = socialUrl;
       }
     }
 
@@ -559,16 +561,7 @@ app.post('/posts', upload, async (req, res) => {
     res.status(201).json(updatedPost);
   } catch (error) {
     console.error('Error creating post:', error);
-    // Clean up uploaded files if there was an error
-    if (req.files) {
-      Object.values(req.files).forEach(files => {
-        files.forEach(file => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      });
-    }
+    // No need to clean up files - they're in memory or already on Cloudinary
     res.status(400).json({
       error: 'Failed to create post',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -622,29 +615,21 @@ app.put('/posts/:id', upload, async (req, res) => {
       seoKeywords: req.body.seoKeywords || post.seoKeywords
     };
 
-    // Handle image uploads
+    // Handle image uploads to Cloudinary
     if (req.files) {
       if (req.files.bannerImage) {
-        updateData.bannerImage = req.files.bannerImage[0].path;
+        const bannerUrl = await uploadToCloudinary(req.files.bannerImage[0].buffer, 'blog-images/banners');
+        updateData.bannerImage = bannerUrl;
       }
       if (req.files.socialImage) {
-        updateData.socialImage = req.files.socialImage[0].path;
+        const socialUrl = await uploadToCloudinary(req.files.socialImage[0].buffer, 'blog-images/social');
+        updateData.socialImage = socialUrl;
       }
     }
 
     await post.update(updateData);
 
-    // Clean up old images if new ones were uploaded
-    if (req.files.bannerImage && oldBannerImage) {
-      if (fs.existsSync(oldBannerImage)) {
-        fs.unlinkSync(oldBannerImage);
-      }
-    }
-    if (req.files.socialImage && oldSocialImage) {
-      if (fs.existsSync(oldSocialImage)) {
-        fs.unlinkSync(oldSocialImage);
-      }
-    }
+    // Note: Old Cloudinary images remain accessible (can implement cleanup later if needed)
 
     const updatedPost = await BlogPost.findByPk(req.params.id, {
       include: [Category]
@@ -653,15 +638,7 @@ app.put('/posts/:id', upload, async (req, res) => {
     res.json(updatedPost);
   } catch (error) {
     console.error('Error updating post:', error);
-    if (req.files) {
-      Object.values(req.files).forEach(files => {
-        files.forEach(file => {
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-          }
-        });
-      });
-    }
+    // No need to clean up files - they're in memory or already on Cloudinary
     res.status(400).json({
       error: 'Failed to update post',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -676,17 +653,9 @@ app.delete('/posts/:id', async (req, res) => {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    const bannerImage = post.bannerImage;
-    const socialImage = post.socialImage;
-
     await post.destroy();
 
-    // Clean up image files
-    [bannerImage, socialImage].forEach(imagePath => {
-      if (imagePath && fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-      }
-    });
+    // Note: Cloudinary images remain accessible (can implement cleanup later if needed)
 
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
