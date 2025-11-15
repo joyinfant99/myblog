@@ -74,6 +74,7 @@ const allowedOrigins = [
   'https://www.joyinfant.me',
   'https://www.joyinfant.com', // Production frontend
   'https://admin.joyinfant.me',
+  'https://admin.joyinfant.com', // Production admin
   'https://www.linkedin.com',
   'https://www.facebook.com',
   'https://twitter.com',
