@@ -462,20 +462,27 @@ app.get('/posts', async (req, res) => {
       ];
     }
 
-    const { count, rows } = await BlogPost.findAndCountAll({
+    // Build query options
+    const queryOptions = {
       where,
       include: [Category],
       order: [['publishDate', sortOrder], ['createdAt', sortOrder]],
-      limit,
-      offset,
       distinct: true
-    });
+    };
+
+    // Only add limit/offset if limit is not 0 (0 means return all)
+    if (limit !== 0) {
+      queryOptions.limit = limit;
+      queryOptions.offset = offset;
+    }
+
+    const { count, rows } = await BlogPost.findAndCountAll(queryOptions);
 
     res.json({
       totalItems: count,
       posts: rows,
       currentPage: page,
-      totalPages: Math.ceil(count / limit)
+      totalPages: limit === 0 ? 1 : Math.ceil(count / limit)
     });
   } catch (error) {
     console.error('Error fetching posts:', error);
