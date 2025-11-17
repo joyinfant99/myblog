@@ -445,7 +445,7 @@ app.get('/posts/:identifier', async (req, res) => {
 app.get('/posts', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 6;
+    const limit = req.query.limit !== undefined ? parseInt(req.query.limit) : 6;
     const offset = (page - 1) * limit;
     const category = req.query.category;
     const sortOrder = req.query.sortOrder === 'asc' ? 'ASC' : 'DESC';
