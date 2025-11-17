@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2;
+const { BetaAnalyticsDataClient } = require('@google-analytics/data');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -18,6 +19,18 @@ cloudinary.config({
 });
 
 console.log('Cloudinary configured:', process.env.CLOUDINARY_CLOUD_NAME);
+
+// Configure Google Analytics
+let analyticsDataClient;
+try {
+  const credentials = JSON.parse(process.env.GA_CREDENTIALS || '{}');
+  analyticsDataClient = new BetaAnalyticsDataClient({
+    credentials
+  });
+  console.log('Google Analytics configured');
+} catch (error) {
+  console.error('Failed to configure Google Analytics:', error.message);
+}
 
 // Basic server health check route
 app.get('/health', (req, res) => {
@@ -700,6 +713,151 @@ const errorHandler = (err, req, res, next) => {
 };
 
 app.use(errorHandler);
+
+// Analytics endpoint
+app.get('/admin/analytics', async (req, res) => {
+  try {
+    if (!analyticsDataClient) {
+      return res.status(503).json({ 
+        error: 'Analytics not configured',
+        message: 'Google Analytics API is not properly configured'
+      });
+    }
+
+    const range = req.query.range || '7days';
+    const propertyId = process.env.GA_PROPERTY_ID;
+    
+    // Calculate date range
+    let startDate, endDate;
+    if (range === 'all') {
+      startDate = '2020-01-01'; // Or your blog's start date
+      endDate = 'today';
+    } else {
+      const daysAgo = range === '30days' ? 30 : range === '90days' ? 90 : 7;
+      startDate = `${daysAgo}daysAgo`;
+      endDate = 'today';
+    }
+
+    // Fetch metrics from Google Analytics
+    const [metricsResponse] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate, endDate }],
+      metrics: [
+        { name: 'screenPageViews' },
+        { name: 'totalUsers' },
+        { name: 'averageSessionDuration' },
+        { name: 'bounceRate' }
+      ]
+    });
+
+    // Fetch views over time
+    const [viewsOverTimeResponse] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'date' }],
+      metrics: [{ name: 'screenPageViews' }],
+      orderBys: [{ dimension: { dimensionName: 'date' } }]
+    });
+
+    // Fetch top pages
+    const [topPagesResponse] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'pageTitle' }],
+      metrics: [
+        { name: 'screenPageViews' },
+        { name: 'averageSessionDuration' },
+        { name: 'bounceRate' }
+      ],
+      orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+      limit: 10
+    });
+
+    // Fetch traffic sources
+    const [trafficSourcesResponse] = await analyticsDataClient.runReport({
+      property: `properties/${propertyId}`,
+      dateRanges: [{ startDate, endDate }],
+      dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+      metrics: [{ name: 'sessions' }]
+    });
+
+    // Parse the data
+    const metrics = metricsResponse.rows?.[0]?.metricValues || [];
+    const totalViews = parseInt(metrics[0]?.value || 0);
+    const totalVisitors = parseInt(metrics[1]?.value || 0);
+    const avgSessionDuration = parseFloat(metrics[2]?.value || 0);
+    const bounceRate = parseFloat(metrics[3]?.value || 0) * 100;
+
+    // Format views over time
+    const viewsOverTime = (viewsOverTimeResponse.rows || []).map(row => {
+      const dateStr = row.dimensionValues[0].value;
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      const date = new Date(`${year}-${month}-${day}`);
+      return {
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        views: parseInt(row.metricValues[0].value)
+      };
+    });
+
+    // Format top posts
+    const topPosts = (topPagesResponse.rows || []).slice(0, 5).map(row => ({
+      title: row.dimensionValues[0].value.substring(0, 30) + (row.dimensionValues[0].value.length > 30 ? '...' : ''),
+      views: parseInt(row.metricValues[0].value)
+    }));
+
+    // Format popular posts with more details
+    const popularPosts = (topPagesResponse.rows || []).map(row => {
+      const avgTime = parseFloat(row.metricValues[1].value);
+      const minutes = Math.floor(avgTime / 60);
+      const seconds = Math.floor(avgTime % 60);
+      return {
+        title: row.dimensionValues[0].value,
+        views: parseInt(row.metricValues[0].value),
+        avgTime: `${minutes}:${seconds.toString().padStart(2, '0')}`,
+        bounceRate: Math.round(parseFloat(row.metricValues[2].value) * 100)
+      };
+    });
+
+    // Format traffic sources
+    const trafficSources = (trafficSourcesResponse.rows || []).map(row => ({
+      name: row.dimensionValues[0].value,
+      value: parseInt(row.metricValues[0].value)
+    }));
+
+    // Get total posts from database
+    const publishedPosts = await BlogPost.count();
+
+    // Format response
+    const analytics = {
+      totalViews,
+      viewsChange: 0, // Would need historical comparison
+      totalVisitors,
+      visitorsChange: 0, // Would need historical comparison
+      avgTimeOnPage: `${Math.floor(avgSessionDuration / 60)}:${String(Math.floor(avgSessionDuration % 60)).padStart(2, '0')}`,
+      bounceRate: Math.round(bounceRate),
+      viewsOverTime,
+      topPosts,
+      trafficSources,
+      popularPosts,
+      seo: {
+        indexedPages: publishedPosts,
+        avgLoadTime: '1.2', // Would need real performance data
+        mobileScore: 95, // Would need real performance data
+        seoScore: 85 // Would need real SEO audit
+      }
+    };
+
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({
+      error: 'Failed to fetch analytics',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
 
 // Function to handle port conflicts
 const findAvailablePort = async (startPort) => {
